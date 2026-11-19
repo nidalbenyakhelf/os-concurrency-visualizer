@@ -1,4 +1,4 @@
-cat << 'EOF' > main.py
+
 import webbrowser
 from server import run_server
 
