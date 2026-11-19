@@ -1,0 +1,77 @@
+cat << 'EOF' > ui/index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OS Concurrency Visualizer — Producer-Consumer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>OS Concurrency Visualizer</h1>
+      <p class="subtitle">Multi-Producer / Multi-Consumer Bounded Buffer with Semaphores</p>
+    </div>
+    <div class="meta">
+      <span id="mode-badge" class="badge">MODE: PAUSE</span>
+      <span id="tick-badge" class="badge">TICK: 0</span>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="panel controls-panel">
+      <h2>Simulation Controls</h2>
+      <div class="button-row">
+        <button id="btn-play" type="button">Play</button>
+        <button id="btn-pause" type="button">Pause</button>
+        <button id="btn-step" type="button">Step Forward</button>
+      </div>
+
+      <div class="speed-controls">
+        <label>
+          Producer Delay (s):
+          <input id="producer-delay" type="number" step="0.1" min="0.1" max="5.0" value="1.0" />
+        </label>
+        <label>
+          Consumer Delay (s):
+          <input id="consumer-delay" type="number" step="0.1" min="0.1" max="5.0" value="1.2" />
+        </label>
+        <button id="btn-apply-speed" type="button">Apply Speeds</button>
+      </div>
+    </section>
+
+    <section class="panel buffer-panel">
+      <h2>Bounded Buffer (<span id="buffer-count">0/0</span>)</h2>
+      <div id="buffer-slots" class="buffer-slots"></div>
+    </section>
+
+    <section class="panel workers-panel">
+      <h2>Threads (RUNNING / BLOCKED)</h2>
+      <div id="workers-list" class="workers-list"></div>
+    </section>
+
+    <section class="panel assistant-panel">
+      <h2>OS Concept &amp; Command Assistant</h2>
+      <div id="chat-log" class="chat-log"></div>
+      <form id="chat-form" class="chat-form">
+        <input
+          id="chat-input"
+          type="text"
+          placeholder="Ask about semaphores/critical section or type e.g. 'slow down producers'..."
+          autocomplete="off"
+        />
+        <button type="submit">Send</button>
+      </form>
+    </section>
+
+    <section class="panel logs-panel">
+      <h2>Event Log</h2>
+      <pre id="event-log" class="event-log"></pre>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
+EOF
