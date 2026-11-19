@@ -81,6 +81,19 @@ class SimulationController:
             delay = float(payload.get("delay", 1.0))
             if role in ("PRODUCER", "CONSUMER"):
                 self.sim.set_role_speed(role, delay)
+        elif action == "SET_CAPACITY":
+            new_cap = max(2, min(12, int(payload.get("capacity", 6))))
+            delays = self._current_delays()
+            self.sim.stop()
+            self.sim = ProducerConsumerSimulation(
+                capacity=new_cap,
+                num_producers=2,
+                num_consumers=2,
+                producer_delay=delays.get("PRODUCER", 1.0),
+                consumer_delay=delays.get("CONSUMER", 1.2),
+                on_update=self._on_snapshot,
+            )
+            self.sim.start()
         return self.get_state()
 
     def handle_chat(self, message: str) -> Dict[str, Any]:

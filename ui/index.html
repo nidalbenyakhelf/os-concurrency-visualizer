@@ -3,110 +3,222 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>محاكاة التزامن — Producer &amp; Consumer</title>
+  <title>OS Concurrency Desktop — Producer &amp; Consumer</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="bg-glow"></div>
-
-  <header class="topbar">
-    <div class="brand">
-      <div class="brand-badge">OS II</div>
+  <header class="top-chrome">
+    <div class="brand-left">
+      <svg class="mascot-mini" viewBox="0 0 64 64" aria-hidden="true">
+        <path d="M14 44 C10 28, 22 14, 38 16 C48 17, 54 26, 52 38 L58 42 L50 46 C46 50, 22 50, 14 44 Z" fill="#b87a4b" stroke="#262a22" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M16 32 L10 26 M20 24 L16 16 M28 19 L27 11 M36 18 L38 10" stroke="#5f6f4e" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="44" cy="31" r="3" fill="#262a22"/>
+        <circle cx="45" cy="30" r="1.1" fill="#fff"/>
+        <path d="M41 39 Q45 43 49 39" fill="none" stroke="#262a22" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
       <div>
-        <h1>محاكاة التزامن والمخزن المحدود</h1>
-        <p class="subtitle">تعدد المنتجين والمستهلكين مع Semaphores (`empty`, `full`, `mutex`) وحالات الخيوط</p>
+        <span class="app-title">BufferOS Desktop</span>
+        <span class="app-tag">Producer–Consumer &amp; Semaphores</span>
       </div>
     </div>
-    <div class="meta">
-      <span id="mode-badge" class="pill mode-pause">PAUSE</span>
-      <span id="tick-badge" class="pill">TICK #0</span>
+
+    <div class="quick-controls">
+      <button id="btn-play" class="win-btn primary" type="button">▶ تشغيل</button>
+      <button id="btn-pause" class="win-btn" type="button">⏸ إيقاف</button>
+      <button id="btn-step" class="win-btn accent" type="button">⏭ خطوة</button>
+      <span id="mode-pill" class="status-pill">PAUSE</span>
+      <span id="tick-pill" class="status-pill">TICK #0</span>
     </div>
   </header>
 
-  <main class="workspace">
-    <section class="card semaphores-strip">
-      <div class="sem-box" id="sem-empty-box">
-        <span class="sem-name">empty</span>
-        <strong id="sem-empty-val" class="sem-val">6</strong>
-        <small>أماكن فارغة (يمنع Overflow)</small>
-      </div>
-      <div class="sem-box" id="sem-full-box">
-        <span class="sem-name">full</span>
-        <strong id="sem-full-val" class="sem-val">0</strong>
-        <small>عناصر جاهزة (يمنع Underflow)</small>
-      </div>
-      <div class="sem-box" id="sem-mutex-box">
-        <span class="sem-name">mutex</span>
-        <strong id="sem-mutex-val" class="sem-val">FREE</strong>
-        <small id="sem-mutex-owner">القسم الحرج متاح</small>
-      </div>
-    </section>
+  <div class="desktop-shell">
+    <aside class="side-dock" aria-label="نوافذ الأدوات">
+      <button class="dock-item" type="button" data-open-win="win-assistant">
+        <svg viewBox="0 0 36 36" class="dock-svg">
+          <rect x="6" y="8" width="24" height="18" rx="6" fill="#f7f4e9" stroke="#262a22" stroke-width="2.4"/>
+          <circle cx="14" cy="17" r="2.2" fill="#262a22"/>
+          <circle cx="22" cy="17" r="2.2" fill="#262a22"/>
+          <path d="M14 22 Q18 25 22 22" fill="none" stroke="#262a22" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span>المساعد</span>
+      </button>
 
-    <div class="main-grid">
-      <section class="card controls-card">
-        <div class="card-head">
-          <h2>التحكم والسرعة</h2>
+      <button class="dock-item" type="button" data-open-win="win-controls">
+        <svg viewBox="0 0 36 36" class="dock-svg">
+          <rect x="6" y="7" width="24" height="22" rx="5" fill="#e6edd8" stroke="#262a22" stroke-width="2.4"/>
+          <line x1="11" y1="14" x2="25" y2="14" stroke="#262a22" stroke-width="2.2" stroke-linecap="round"/>
+          <circle cx="15" cy="14" r="3" fill="#f28c28" stroke="#262a22" stroke-width="2"/>
+          <line x1="11" y1="22" x2="25" y2="22" stroke="#262a22" stroke-width="2.2" stroke-linecap="round"/>
+          <circle cx="21" cy="22" r="3" fill="#5a8f69" stroke="#262a22" stroke-width="2"/>
+        </svg>
+        <span>السرعة والسعة</span>
+      </button>
+
+      <button class="dock-item" type="button" data-open-win="win-threads">
+        <svg viewBox="0 0 36 36" class="dock-svg">
+          <circle cx="12" cy="18" r="6" fill="#9bd39c" stroke="#262a22" stroke-width="2.2"/>
+          <circle cx="24" cy="18" r="6" fill="#f7d060" stroke="#262a22" stroke-width="2.2"/>
+          <path d="M18 12 L18 24" stroke="#262a22" stroke-width="2.2" stroke-dasharray="2 2"/>
+        </svg>
+        <span>الخيوط</span>
+      </button>
+
+      <button class="dock-item" type="button" data-open-win="win-logs">
+        <svg viewBox="0 0 36 36" class="dock-svg">
+          <rect x="7" y="6" width="22" height="24" rx="4" fill="#faf8f0" stroke="#262a22" stroke-width="2.4"/>
+          <line x1="12" y1="13" x2="24" y2="13" stroke="#262a22" stroke-width="2.2" stroke-linecap="round"/>
+          <line x1="12" y1="18" x2="22" y2="18" stroke="#262a22" stroke-width="2.2" stroke-linecap="round"/>
+          <line x1="12" y1="23" x2="19" y2="23" stroke="#5a8f69" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+        <span>السجل</span>
+      </button>
+    </aside>
+
+    <main class="stage-area">
+      <section class="os-window stage-window">
+        <div class="win-titlebar">
+          <span class="win-title">🌱 مسرح المحاكاة الحي — Bounded Buffer &amp; Semaphores</span>
+          <div class="win-dots">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
         </div>
 
-        <div class="action-buttons">
-          <button id="btn-play" class="btn btn-primary" type="button">▶ تشغيل (Play)</button>
-          <button id="btn-pause" class="btn btn-ghost" type="button">⏸ إيقاف (Pause)</button>
-          <button id="btn-step" class="btn btn-accent" type="button">⏭ خطوة (Step)</button>
-        </div>
+        <div class="win-body stage-body">
+          <div class="sem-row">
+            <div id="sem-empty-card" class="sem-chip">
+              <span class="sem-k">empty</span>
+              <strong id="sem-empty-val" class="sem-n">6</strong>
+              <span class="sem-d">أماكن متاحة (يمنع Overflow)</span>
+            </div>
+            <div id="sem-full-card" class="sem-chip">
+              <span class="sem-k">full</span>
+              <strong id="sem-full-val" class="sem-n">0</strong>
+              <span class="sem-d">عناصر جاهزة (يمنع Underflow)</span>
+            </div>
+            <div id="sem-mutex-card" class="sem-chip">
+              <span class="sem-k">mutex</span>
+              <strong id="sem-mutex-val" class="sem-n">FREE</strong>
+              <span id="sem-mutex-sub" class="sem-d">القسم الحرج متاح</span>
+            </div>
+          </div>
 
-        <div class="sliders-box">
-          <div class="control-row">
-            <label for="producer-delay">تأخير المنتجين (s)</label>
+          <div class="sim-lane">
+            <div class="lane-side">
+              <div class="lane-heading">
+                <svg class="cute-icon" viewBox="0 0 40 40">
+                  <circle cx="20" cy="20" r="16" fill="#ffd89b" stroke="#262a22" stroke-width="2.4"/>
+                  <circle cx="15" cy="18" r="2.2" fill="#262a22"/>
+                  <circle cx="25" cy="18" r="2.2" fill="#262a22"/>
+                  <path d="M15 25 Q20 29 25 25" fill="none" stroke="#262a22" stroke-width="2.2" stroke-linecap="round"/>
+                </svg>
+                <span>المنتجون (Producers)</span>
+              </div>
+              <div id="producers-mini" class="role-mini-list"></div>
+            </div>
+
+            <div class="lane-center">
+              <div class="lane-heading center-head">
+                <span>المخزن المحدود (Critical Section)</span>
+                <span id="buffer-counter" class="mini-counter">0 / 6</span>
+              </div>
+              <div id="buffer-slots" class="slots-stage"></div>
+            </div>
+
+            <div class="lane-side">
+              <div class="lane-heading">
+                <svg class="cute-icon" viewBox="0 0 40 40">
+                  <circle cx="20" cy="20" r="16" fill="#bde0fe" stroke="#262a22" stroke-width="2.4"/>
+                  <circle cx="15" cy="18" r="2.2" fill="#262a22"/>
+                  <circle cx="25" cy="18" r="2.2" fill="#262a22"/>
+                  <path d="M15 24 Q20 28 25 24" fill="none" stroke="#262a22" stroke-width="2.2" stroke-linecap="round"/>
+                </svg>
+                <span>المستهلكون (Consumers)</span>
+              </div>
+              <div id="consumers-mini" class="role-mini-list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- نافذة عائمة: المساعد التفاعلي -->
+      <section id="win-assistant" class="os-window floating-win open" style="top: 34px; left: 32px; width: 390px;">
+        <div class="win-titlebar draggable-bar">
+          <span class="win-title">🦊 مساعد نظام التشغيل التفاعلي</span>
+          <div class="win-actions">
+            <button class="win-close" type="button" data-close-win="win-assistant">×</button>
+          </div>
+        </div>
+        <div class="win-body">
+          <div class="prompt-pills">
+            <button class="pill-btn" type="button" data-prompt="اشرح لي السيمافور و mutex">Semaphores &amp; mutex</button>
+            <button class="pill-btn" type="button" data-prompt="ماذا يحدث الآن داخل المحاكاة؟">حالة المحاكاة</button>
+            <button class="pill-btn" type="button" data-prompt="أبطئ المنتجين">أبطئ المنتجين</button>
+            <button class="pill-btn" type="button" data-prompt="سرّع المستهلكين">سرّع المستهلكين</button>
+          </div>
+          <div id="chat-stream" class="chat-box"></div>
+          <form id="chat-form" class="chat-form">
+            <input id="chat-input" type="text" placeholder="اسأل عن مفهوم أو اكتب أمراً..." autocomplete="off" />
+            <button type="submit" class="win-btn primary">إرسال</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- نافذة عائمة: التحكم بالسرعات والسعة -->
+      <section id="win-controls" class="os-window floating-win" style="top: 85px; left: 120px; width: 340px;">
+        <div class="win-titlebar draggable-bar">
+          <span class="win-title">🎛️ ضبط السرعات والسعة</span>
+          <div class="win-actions">
+            <button class="win-close" type="button" data-close-win="win-controls">×</button>
+          </div>
+        </div>
+        <div class="win-body form-stack">
+          <label class="field-row">
+            <span>تأخير المنتجين (s)</span>
             <input id="producer-delay" type="number" step="0.1" min="0.15" max="5.0" value="1.0" />
-          </div>
-          <div class="control-row">
-            <label for="consumer-delay">تأخير المستهلكين (s)</label>
+          </label>
+          <label class="field-row">
+            <span>تأخير المستهلكين (s)</span>
             <input id="consumer-delay" type="number" step="0.1" min="0.15" max="5.0" value="1.2" />
+          </label>
+          <button id="btn-apply-speed" class="win-btn primary full" type="button">حفظ السرعات</button>
+          <hr class="soft-hr" />
+          <label class="field-row">
+            <span>عدد مربعات المخزن</span>
+            <input id="capacity-input" type="number" min="2" max="12" value="6" />
+          </label>
+          <button id="btn-apply-capacity" class="win-btn accent full" type="button">إعادة ضبط بالسعة الجديدة</button>
+        </div>
+      </section>
+
+      <!-- نافذة عائمة: تفاصيل الخيوط -->
+      <section id="win-threads" class="os-window floating-win" style="top: 110px; left: 210px; width: 360px;">
+        <div class="win-titlebar draggable-bar">
+          <span class="win-title">🧵 حالات الخيوط (RUNNING / BLOCKED)</span>
+          <div class="win-actions">
+            <button class="win-close" type="button" data-close-win="win-threads">×</button>
           </div>
-          <button id="btn-apply-speed" class="btn btn-secondary full-width" type="button">تطبيق السرعات</button>
+        </div>
+        <div class="win-body">
+          <div id="workers-detail-list" class="workers-detail"></div>
         </div>
       </section>
 
-      <section class="card buffer-card">
-        <div class="card-head">
-          <h2>المخزن المحدود (Bounded Buffer)</h2>
-          <span id="buffer-count" class="counter-pill">0 / 6</span>
+      <!-- نافذة عائمة: سجل الأحداث -->
+      <section id="win-logs" class="os-window floating-win" style="top: 140px; left: 290px; width: 410px;">
+        <div class="win-titlebar draggable-bar">
+          <span class="win-title">📜 سجل الأحداث (Event Log)</span>
+          <div class="win-actions">
+            <button class="win-close" type="button" data-close-win="win-logs">×</button>
+          </div>
         </div>
-        <div id="buffer-slots" class="buffer-grid"></div>
+        <div class="win-body">
+          <pre id="event-log" class="log-pre"></pre>
+        </div>
       </section>
-
-      <section class="card workers-card">
-        <div class="card-head">
-          <h2>الخيوط وحالات التنفيذ</h2>
-        </div>
-        <div id="workers-list" class="workers-stack"></div>
-      </section>
-
-      <section class="card assistant-card">
-        <div class="card-head">
-          <h2>المساعد التفاعلي (مفاهيم وأوامر)</h2>
-        </div>
-        <div class="quick-prompts">
-          <button class="chip" type="button" data-prompt="اشرح لي السيمافور و mutex">شرح Semaphores &amp; mutex</button>
-          <button class="chip" type="button" data-prompt="ماذا يحدث الآن داخل المحاكاة؟">قراءة الحالة الآن</button>
-          <button class="chip" type="button" data-prompt="أبطئ المنتجين">أبطئ المنتجين</button>
-          <button class="chip" type="button" data-prompt="سرّع المستهلكين">سرّع المستهلكين</button>
-        </div>
-        <div id="chat-log" class="chat-stream"></div>
-        <form id="chat-form" class="chat-composer">
-          <input id="chat-input" type="text" placeholder="اسأل عن التزامن أو اكتب أمراً مثل: أبطئ المنتجين..." autocomplete="off" />
-          <button type="submit" class="btn btn-primary">إرسال</button>
-        </form>
-      </section>
-
-      <section class="card logs-card">
-        <div class="card-head">
-          <h2>سجل الأحداث (Event Log)</h2>
-        </div>
-        <pre id="event-log" class="log-box"></pre>
-      </section>
-    </div>
-  </main>
+    </main>
+  </div>
 
   <script src="app.js"></script>
 </body>
