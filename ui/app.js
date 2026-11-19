@@ -1,119 +1,131 @@
-const modeBadge = document.getElementById("mode-badge");
-const tickBadge = document.getElementById("tick-badge");
-const bufferCount = document.getElementById("buffer-count");
+const modePill = document.getElementById("mode-pill");
+const tickPill = document.getElementById("tick-pill");
+const bufferCounter = document.getElementById("buffer-counter");
 const bufferSlots = document.getElementById("buffer-slots");
-const workersList = document.getElementById("workers-list");
+const producersMini = document.getElementById("producers-mini");
+const consumersMini = document.getElementById("consumers-mini");
+const workersDetailList = document.getElementById("workers-detail-list");
 const eventLog = document.getElementById("event-log");
-const chatLog = document.getElementById("chat-log");
+const chatStream = document.getElementById("chat-stream");
 const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
 
 const semEmptyVal = document.getElementById("sem-empty-val");
 const semFullVal = document.getElementById("sem-full-val");
 const semMutexVal = document.getElementById("sem-mutex-val");
-const semMutexOwner = document.getElementById("sem-mutex-owner");
-const semEmptyBox = document.getElementById("sem-empty-box");
-const semFullBox = document.getElementById("sem-full-box");
-const semMutexBox = document.getElementById("sem-mutex-box");
+const semMutexSub = document.getElementById("sem-mutex-sub");
+const semEmptyCard = document.getElementById("sem-empty-card");
+const semFullCard = document.getElementById("sem-full-card");
+const semMutexCard = document.getElementById("sem-mutex-card");
 
 const producerDelayInput = document.getElementById("producer-delay");
 const consumerDelayInput = document.getElementById("consumer-delay");
+const capacityInput = document.getElementById("capacity-input");
 
-let lastTickSeen = -1;
+let lastTick = -1;
 let prevEmpty = null;
 let prevFull = null;
+let topZ = 35;
 
-function pulseBox(el) {
-  el.classList.remove("pulse");
-  void el.offsetWidth;
-  el.classList.add("pulse");
+function bumpSem(card) {
+  card.classList.remove("bump");
+  void card.offsetWidth;
+  card.classList.add("bump");
 }
 
-function appendMessage(sender, text) {
-  const bubble = document.createElement("div");
-  bubble.className = `bubble ${sender}`;
-  bubble.textContent = text;
-  chatLog.appendChild(bubble);
-  chatLog.scrollTop = chatLog.scrollHeight;
+function appendBubble(sender, text) {
+  const el = document.createElement("div");
+  el.className = `msg-bubble ${sender}`;
+  el.textContent = text;
+  chatStream.appendChild(el);
+  chatStream.scrollTop = chatStream.scrollHeight;
 }
 
 function renderState(state) {
   if (!state || !state.workers) return;
 
-  modeBadge.textContent = state.mode;
-  modeBadge.className = `pill mode-${String(state.mode || "").toLowerCase()}`;
-  tickBadge.textContent = `TICK #${state.tick}`;
+  modePill.textContent = state.mode;
+  tickPill.textContent = `TICK #${state.tick}`;
 
   const emptyCount = Number(state.empty_count ?? 0);
   const fullCount = Number(state.full_count ?? 0);
   semEmptyVal.textContent = String(emptyCount);
   semFullVal.textContent = String(fullCount);
 
-  if (prevEmpty !== null && prevEmpty !== emptyCount) pulseBox(semEmptyBox);
-  if (prevFull !== null && prevFull !== fullCount) pulseBox(semFullBox);
+  if (prevEmpty !== null && prevEmpty !== emptyCount) bumpSem(semEmptyCard);
+  if (prevFull !== null && prevFull !== fullCount) bumpSem(semFullCard);
   prevEmpty = emptyCount;
   prevFull = fullCount;
 
   if (state.mutex_locked) {
-    semMutexBox.classList.add("locked");
+    semMutexCard.classList.add("locked");
     semMutexVal.textContent = "LOCKED";
-    semMutexOwner.textContent = `داخل القسم الحرج: ${state.mutex_owner || "Thread"}`;
+    semMutexSub.textContent = `داخل القسم الحرج: ${state.mutex_owner || "Thread"}`;
   } else {
-    semMutexBox.classList.remove("locked");
+    semMutexCard.classList.remove("locked");
     semMutexVal.textContent = "FREE";
-    semMutexOwner.textContent = "القسم الحرج متاح";
+    semMutexSub.textContent = "القسم الحرج متاح";
   }
 
   const items = state.buffer || [];
   const capacity = Number(state.capacity || 0);
-  bufferCount.textContent = `${items.length} / ${capacity}`;
+  bufferCounter.textContent = `${items.length} / ${capacity}`;
+  if (document.activeElement !== capacityInput && capacity > 0) {
+    capacityInput.value = String(capacity);
+  }
 
   bufferSlots.innerHTML = "";
   for (let i = 0; i < capacity; i += 1) {
-    const slot = document.createElement("div");
+    const cell = document.createElement("div");
     if (i < items.length) {
-      slot.className = "slot occupied";
-      slot.textContent = items[i];
+      cell.className = "buf-cell filled";
+      cell.textContent = items[i];
     } else {
-      slot.className = "slot";
-      slot.textContent = `Slot ${i + 1}\nفارغ`;
+      cell.className = "buf-cell";
+      cell.textContent = `Slot ${i + 1}\nفارغ`;
     }
-    bufferSlots.appendChild(slot);
+    bufferSlots.appendChild(cell);
   }
 
-  workersList.innerHTML = "";
-  let syncedProducer = false;
-  let syncedConsumer = false;
+  producersMini.innerHTML = "";
+  consumersMini.innerHTML = "";
+  workersDetailList.innerHTML = "";
+
+  let syncedP = false;
+  let syncedC = false;
 
   Object.values(state.workers).forEach((w) => {
-    const isMutexOwner = state.mutex_owner === w.worker_id;
-    const card = document.createElement("div");
-    card.className = `worker-card ${w.state}${isMutexOwner ? " mutex-active" : ""}`;
-    const roleLabel = w.role === "PRODUCER" ? "منتِج (Producer)" : "مستهلِك (Consumer)";
-    card.innerHTML = `
-      <div class="worker-top">
-        <span>${w.worker_id} — ${roleLabel}</span>
-        <span class="badge-${w.state}">${w.state}</span>
-      </div>
-      <div class="worker-sub">الخطوة: <strong>${w.last_action}</strong> | التأخير: ${Number(w.delay).toFixed(2)}s</div>
-      <div class="worker-sub">التفصيل: ${w.reason}</div>
-    `;
-    workersList.appendChild(card);
+    const mini = document.createElement("div");
+    mini.className = `mini-worker ${w.state}`;
+    mini.innerHTML = `<strong>${w.worker_id}</strong> · ${w.state}<br/><span>${w.last_action}</span>`;
+    if (w.role === "PRODUCER") {
+      producersMini.appendChild(mini);
+      if (!syncedP && document.activeElement !== producerDelayInput) {
+        producerDelayInput.value = Number(w.delay).toFixed(2);
+        syncedP = true;
+      }
+    } else {
+      consumersMini.appendChild(mini);
+      if (!syncedC && document.activeElement !== consumerDelayInput) {
+        consumerDelayInput.value = Number(w.delay).toFixed(2);
+        syncedC = true;
+      }
+    }
 
-    if (w.role === "PRODUCER" && !syncedProducer && document.activeElement !== producerDelayInput) {
-      producerDelayInput.value = Number(w.delay).toFixed(2);
-      syncedProducer = true;
-    }
-    if (w.role === "CONSUMER" && !syncedConsumer && document.activeElement !== consumerDelayInput) {
-      consumerDelayInput.value = Number(w.delay).toFixed(2);
-      syncedConsumer = true;
-    }
+    const detail = document.createElement("div");
+    detail.className = `detail-card ${w.state}`;
+    detail.innerHTML = `
+      <div><strong>${w.worker_id}</strong> (${w.role}) — <strong>${w.state}</strong></div>
+      <div>الخطوة: ${w.last_action} | التأخير: ${Number(w.delay).toFixed(2)}s</div>
+      <div>السبب: ${w.reason}</div>
+    `;
+    workersDetailList.appendChild(detail);
   });
 
-  if (state.tick !== lastTickSeen) {
+  if (state.tick !== lastTick) {
     eventLog.textContent = (state.logs || []).join("\n");
     eventLog.scrollTop = eventLog.scrollHeight;
-    lastTickSeen = state.tick;
+    lastTick = state.tick;
   }
 }
 
@@ -128,19 +140,19 @@ async function sendControl(payload) {
   }
 }
 
-async function submitChatText(message) {
-  const trimmed = message.trim();
-  if (!trimmed) return;
-  appendMessage("user", trimmed);
+async function sendPrompt(text) {
+  const clean = text.trim();
+  if (!clean) return;
+  appendBubble("user", clean);
 
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: trimmed }),
+    body: JSON.stringify({ message: clean }),
   });
   if (res.ok) {
     const data = await res.json();
-    appendMessage("bot", data.reply);
+    appendBubble("bot", data.reply);
     if (data.state) {
       renderState(data.state);
     }
@@ -154,9 +166,61 @@ async function pollState() {
       renderState(await res.json());
     }
   } catch (_) {
-    // Server starting or stopped
+    // Server starting or stopping
   }
 }
+
+// Floating windows toggle and drag
+document.querySelectorAll("[data-open-win]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const win = document.getElementById(btn.dataset.openWin);
+    if (!win) return;
+    win.classList.add("open");
+    topZ += 1;
+    win.style.zIndex = String(topZ);
+  });
+});
+
+document.querySelectorAll("[data-close-win]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const win = document.getElementById(btn.dataset.closeWin);
+    if (win) win.classList.remove("open");
+  });
+});
+
+document.querySelectorAll(".floating-win").forEach((win) => {
+  win.addEventListener("mousedown", () => {
+    topZ += 1;
+    win.style.zIndex = String(topZ);
+  });
+
+  const bar = win.querySelector(".draggable-bar");
+  if (!bar) return;
+
+  bar.addEventListener("mousedown", (e) => {
+    if (e.target.closest("button")) return;
+    const rect = win.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    function onMove(ev) {
+      const winWidth = win.offsetWidth || rect.width;
+      const winHeight = win.offsetHeight || rect.height;
+      const nextLeft = Math.max(8, Math.min(window.innerWidth - winWidth - 8, ev.clientX - offsetX));
+      const nextTop = Math.max(8, Math.min(window.innerHeight - winHeight - 8, ev.clientY - offsetY));
+      win.style.left = `${nextLeft}px`;
+      win.style.top = `${nextTop}px`;
+    }
+
+    function onUp() {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    }
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  });
+});
 
 document.getElementById("btn-play").addEventListener("click", () => sendControl({ action: "PLAY" }));
 document.getElementById("btn-pause").addEventListener("click", () => sendControl({ action: "PAUSE" }));
@@ -175,20 +239,25 @@ document.getElementById("btn-apply-speed").addEventListener("click", async () =>
   });
 });
 
-document.querySelectorAll(".chip[data-prompt]").forEach((chip) => {
-  chip.addEventListener("click", () => submitChatText(chip.dataset.prompt || ""));
+document.getElementById("btn-apply-capacity").addEventListener("click", async () => {
+  const cap = Math.max(2, Math.min(12, parseInt(capacityInput.value, 10) || 6));
+  await sendControl({ action: "SET_CAPACITY", capacity: cap });
+});
+
+document.querySelectorAll(".pill-btn[data-prompt]").forEach((btn) => {
+  btn.addEventListener("click", () => sendPrompt(btn.dataset.prompt || ""));
 });
 
 chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const text = chatInput.value;
+  const val = chatInput.value;
   chatInput.value = "";
-  await submitChatText(text);
+  await sendPrompt(val);
 });
 
-appendMessage(
+appendBubble(
   "bot",
-  "أهلاً بك! اسألني عن Semaphores و Critical Section و Race Condition أو اطلب مني التحكم بالسرعات والتشغيل."
+  "أهلاً بك! اسحب نوافذ الأدوات أو أغلقها، واسألني عن Semaphores و Critical Section أو أرسل أمراً للتحكم بالسرعة."
 );
 pollState();
 setInterval(pollState, 350);
