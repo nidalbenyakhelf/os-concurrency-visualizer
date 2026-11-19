@@ -1,1 +1,1 @@
-# Core Python standard library is used initially (threading, dataclasses, enum, http.server, json)
+# Uses Python standard library (threading, dataclasses, enum, http.server, json, webbrowser)

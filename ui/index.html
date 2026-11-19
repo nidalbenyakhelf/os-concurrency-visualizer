@@ -1,77 +1,113 @@
-cat << 'EOF' > ui/index.html
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OS Concurrency Visualizer — Producer-Consumer</title>
+  <title>محاكاة التزامن — Producer &amp; Consumer</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div class="bg-glow"></div>
+
   <header class="topbar">
-    <div>
-      <h1>OS Concurrency Visualizer</h1>
-      <p class="subtitle">Multi-Producer / Multi-Consumer Bounded Buffer with Semaphores</p>
+    <div class="brand">
+      <div class="brand-badge">OS II</div>
+      <div>
+        <h1>محاكاة التزامن والمخزن المحدود</h1>
+        <p class="subtitle">تعدد المنتجين والمستهلكين مع Semaphores (`empty`, `full`, `mutex`) وحالات الخيوط</p>
+      </div>
     </div>
     <div class="meta">
-      <span id="mode-badge" class="badge">MODE: PAUSE</span>
-      <span id="tick-badge" class="badge">TICK: 0</span>
+      <span id="mode-badge" class="pill mode-pause">PAUSE</span>
+      <span id="tick-badge" class="pill">TICK #0</span>
     </div>
   </header>
 
-  <main class="grid">
-    <section class="panel controls-panel">
-      <h2>Simulation Controls</h2>
-      <div class="button-row">
-        <button id="btn-play" type="button">Play</button>
-        <button id="btn-pause" type="button">Pause</button>
-        <button id="btn-step" type="button">Step Forward</button>
+  <main class="workspace">
+    <section class="card semaphores-strip">
+      <div class="sem-box" id="sem-empty-box">
+        <span class="sem-name">empty</span>
+        <strong id="sem-empty-val" class="sem-val">6</strong>
+        <small>أماكن فارغة (يمنع Overflow)</small>
       </div>
-
-      <div class="speed-controls">
-        <label>
-          Producer Delay (s):
-          <input id="producer-delay" type="number" step="0.1" min="0.1" max="5.0" value="1.0" />
-        </label>
-        <label>
-          Consumer Delay (s):
-          <input id="consumer-delay" type="number" step="0.1" min="0.1" max="5.0" value="1.2" />
-        </label>
-        <button id="btn-apply-speed" type="button">Apply Speeds</button>
+      <div class="sem-box" id="sem-full-box">
+        <span class="sem-name">full</span>
+        <strong id="sem-full-val" class="sem-val">0</strong>
+        <small>عناصر جاهزة (يمنع Underflow)</small>
+      </div>
+      <div class="sem-box" id="sem-mutex-box">
+        <span class="sem-name">mutex</span>
+        <strong id="sem-mutex-val" class="sem-val">FREE</strong>
+        <small id="sem-mutex-owner">القسم الحرج متاح</small>
       </div>
     </section>
 
-    <section class="panel buffer-panel">
-      <h2>Bounded Buffer (<span id="buffer-count">0/0</span>)</h2>
-      <div id="buffer-slots" class="buffer-slots"></div>
-    </section>
+    <div class="main-grid">
+      <section class="card controls-card">
+        <div class="card-head">
+          <h2>التحكم والسرعة</h2>
+        </div>
 
-    <section class="panel workers-panel">
-      <h2>Threads (RUNNING / BLOCKED)</h2>
-      <div id="workers-list" class="workers-list"></div>
-    </section>
+        <div class="action-buttons">
+          <button id="btn-play" class="btn btn-primary" type="button">▶ تشغيل (Play)</button>
+          <button id="btn-pause" class="btn btn-ghost" type="button">⏸ إيقاف (Pause)</button>
+          <button id="btn-step" class="btn btn-accent" type="button">⏭ خطوة (Step)</button>
+        </div>
 
-    <section class="panel assistant-panel">
-      <h2>OS Concept &amp; Command Assistant</h2>
-      <div id="chat-log" class="chat-log"></div>
-      <form id="chat-form" class="chat-form">
-        <input
-          id="chat-input"
-          type="text"
-          placeholder="Ask about semaphores/critical section or type e.g. 'slow down producers'..."
-          autocomplete="off"
-        />
-        <button type="submit">Send</button>
-      </form>
-    </section>
+        <div class="sliders-box">
+          <div class="control-row">
+            <label for="producer-delay">تأخير المنتجين (s)</label>
+            <input id="producer-delay" type="number" step="0.1" min="0.15" max="5.0" value="1.0" />
+          </div>
+          <div class="control-row">
+            <label for="consumer-delay">تأخير المستهلكين (s)</label>
+            <input id="consumer-delay" type="number" step="0.1" min="0.15" max="5.0" value="1.2" />
+          </div>
+          <button id="btn-apply-speed" class="btn btn-secondary full-width" type="button">تطبيق السرعات</button>
+        </div>
+      </section>
 
-    <section class="panel logs-panel">
-      <h2>Event Log</h2>
-      <pre id="event-log" class="event-log"></pre>
-    </section>
+      <section class="card buffer-card">
+        <div class="card-head">
+          <h2>المخزن المحدود (Bounded Buffer)</h2>
+          <span id="buffer-count" class="counter-pill">0 / 6</span>
+        </div>
+        <div id="buffer-slots" class="buffer-grid"></div>
+      </section>
+
+      <section class="card workers-card">
+        <div class="card-head">
+          <h2>الخيوط وحالات التنفيذ</h2>
+        </div>
+        <div id="workers-list" class="workers-stack"></div>
+      </section>
+
+      <section class="card assistant-card">
+        <div class="card-head">
+          <h2>المساعد التفاعلي (مفاهيم وأوامر)</h2>
+        </div>
+        <div class="quick-prompts">
+          <button class="chip" type="button" data-prompt="اشرح لي السيمافور و mutex">شرح Semaphores &amp; mutex</button>
+          <button class="chip" type="button" data-prompt="ماذا يحدث الآن داخل المحاكاة؟">قراءة الحالة الآن</button>
+          <button class="chip" type="button" data-prompt="أبطئ المنتجين">أبطئ المنتجين</button>
+          <button class="chip" type="button" data-prompt="سرّع المستهلكين">سرّع المستهلكين</button>
+        </div>
+        <div id="chat-log" class="chat-stream"></div>
+        <form id="chat-form" class="chat-composer">
+          <input id="chat-input" type="text" placeholder="اسأل عن التزامن أو اكتب أمراً مثل: أبطئ المنتجين..." autocomplete="off" />
+          <button type="submit" class="btn btn-primary">إرسال</button>
+        </form>
+      </section>
+
+      <section class="card logs-card">
+        <div class="card-head">
+          <h2>سجل الأحداث (Event Log)</h2>
+        </div>
+        <pre id="event-log" class="log-box"></pre>
+      </section>
+    </div>
   </main>
 
   <script src="app.js"></script>
 </body>
 </html>
-EOF

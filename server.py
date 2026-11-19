@@ -1,9 +1,8 @@
-cat << 'EOF' > server.py
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import threading
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from assistant.intent_parser import parse_command
@@ -17,8 +16,9 @@ class SimulationController:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._latest_state: Dict[str, Any] = {}
+        self._chat_history: List[Dict[str, str]] = []
         self.sim = ProducerConsumerSimulation(
-            capacity=5,
+            capacity=6,
             num_producers=2,
             num_consumers=2,
             producer_delay=1.0,
@@ -34,6 +34,10 @@ class SimulationController:
                 "buffer": snap.buffer,
                 "capacity": snap.capacity,
                 "mode": snap.mode.value,
+                "empty_count": snap.empty_count,
+                "full_count": snap.full_count,
+                "mutex_locked": snap.mutex_locked,
+                "mutex_owner": snap.mutex_owner,
                 "workers": {
                     wid: {
                         "worker_id": w.worker_id,
@@ -46,6 +50,7 @@ class SimulationController:
                     for wid, w in snap.workers.items()
                 },
                 "logs": snap.logs,
+                "last_event": snap.last_event,
             }
 
     def get_state(self) -> Dict[str, Any]:
@@ -79,6 +84,11 @@ class SimulationController:
         return self.get_state()
 
     def handle_chat(self, message: str) -> Dict[str, Any]:
+        current_state = self.get_state()
+        with self._lock:
+            self._chat_history.append({"role": "user", "content": message})
+            history_snapshot = list(self._chat_history)
+
         parsed = parse_command(message, current_delays=self._current_delays())
         applied_changes: Optional[Dict[str, Any]] = None
 
@@ -103,7 +113,11 @@ class SimulationController:
             applied_changes = {"speeds": speeds}
         else:
             query = str(parsed.payload.get("query", message))
-            reply = answer_concept(query)
+            reply = answer_concept(query, state=current_state, history=history_snapshot)
+
+        with self._lock:
+            self._chat_history.append({"role": "assistant", "content": reply})
+            self._chat_history = self._chat_history[-20:]
 
         return {
             "reply": reply,

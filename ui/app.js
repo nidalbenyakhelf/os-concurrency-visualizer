@@ -1,4 +1,3 @@
-cat << 'EOF' > ui/app.js
 const modeBadge = document.getElementById("mode-badge");
 const tickBadge = document.getElementById("tick-badge");
 const bufferCount = document.getElementById("buffer-count");
@@ -9,26 +8,65 @@ const chatLog = document.getElementById("chat-log");
 const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
 
+const semEmptyVal = document.getElementById("sem-empty-val");
+const semFullVal = document.getElementById("sem-full-val");
+const semMutexVal = document.getElementById("sem-mutex-val");
+const semMutexOwner = document.getElementById("sem-mutex-owner");
+const semEmptyBox = document.getElementById("sem-empty-box");
+const semFullBox = document.getElementById("sem-full-box");
+const semMutexBox = document.getElementById("sem-mutex-box");
+
 const producerDelayInput = document.getElementById("producer-delay");
 const consumerDelayInput = document.getElementById("consumer-delay");
 
-function appendChat(sender, text) {
-  const div = document.createElement("div");
-  div.className = `chat-msg ${sender}`;
-  div.textContent = `${sender === "user" ? "You" : "Assistant"}: ${text}`;
-  chatLog.appendChild(div);
+let lastTickSeen = -1;
+let prevEmpty = null;
+let prevFull = null;
+
+function pulseBox(el) {
+  el.classList.remove("pulse");
+  void el.offsetWidth;
+  el.classList.add("pulse");
+}
+
+function appendMessage(sender, text) {
+  const bubble = document.createElement("div");
+  bubble.className = `bubble ${sender}`;
+  bubble.textContent = text;
+  chatLog.appendChild(bubble);
   chatLog.scrollTop = chatLog.scrollHeight;
 }
 
 function renderState(state) {
   if (!state || !state.workers) return;
 
-  modeBadge.textContent = `MODE: ${state.mode}`;
-  tickBadge.textContent = `TICK: ${state.tick}`;
+  modeBadge.textContent = state.mode;
+  modeBadge.className = `pill mode-${String(state.mode || "").toLowerCase()}`;
+  tickBadge.textContent = `TICK #${state.tick}`;
+
+  const emptyCount = Number(state.empty_count ?? 0);
+  const fullCount = Number(state.full_count ?? 0);
+  semEmptyVal.textContent = String(emptyCount);
+  semFullVal.textContent = String(fullCount);
+
+  if (prevEmpty !== null && prevEmpty !== emptyCount) pulseBox(semEmptyBox);
+  if (prevFull !== null && prevFull !== fullCount) pulseBox(semFullBox);
+  prevEmpty = emptyCount;
+  prevFull = fullCount;
+
+  if (state.mutex_locked) {
+    semMutexBox.classList.add("locked");
+    semMutexVal.textContent = "LOCKED";
+    semMutexOwner.textContent = `داخل القسم الحرج: ${state.mutex_owner || "Thread"}`;
+  } else {
+    semMutexBox.classList.remove("locked");
+    semMutexVal.textContent = "FREE";
+    semMutexOwner.textContent = "القسم الحرج متاح";
+  }
 
   const items = state.buffer || [];
-  const capacity = state.capacity || 0;
-  bufferCount.textContent = `${items.length}/${capacity}`;
+  const capacity = Number(state.capacity || 0);
+  bufferCount.textContent = `${items.length} / ${capacity}`;
 
   bufferSlots.innerHTML = "";
   for (let i = 0; i < capacity; i += 1) {
@@ -38,40 +76,45 @@ function renderState(state) {
       slot.textContent = items[i];
     } else {
       slot.className = "slot";
-      slot.textContent = `Slot ${i + 1}\n(Empty)`;
+      slot.textContent = `Slot ${i + 1}\nفارغ`;
     }
     bufferSlots.appendChild(slot);
   }
 
   workersList.innerHTML = "";
-  let updatedProducer = false;
-  let updatedConsumer = false;
+  let syncedProducer = false;
+  let syncedConsumer = false;
 
   Object.values(state.workers).forEach((w) => {
+    const isMutexOwner = state.mutex_owner === w.worker_id;
     const card = document.createElement("div");
-    card.className = `worker-card ${w.state}`;
+    card.className = `worker-card ${w.state}${isMutexOwner ? " mutex-active" : ""}`;
+    const roleLabel = w.role === "PRODUCER" ? "منتِج (Producer)" : "مستهلِك (Consumer)";
     card.innerHTML = `
-      <div class="worker-header">
-        <span>${w.worker_id} (${w.role})</span>
-        <span class="state-${w.state}">${w.state}</span>
+      <div class="worker-top">
+        <span>${w.worker_id} — ${roleLabel}</span>
+        <span class="badge-${w.state}">${w.state}</span>
       </div>
-      <div class="worker-meta">Action: ${w.last_action} | Delay: ${Number(w.delay).toFixed(2)}s</div>
-      <div class="worker-meta">Reason: ${w.reason}</div>
+      <div class="worker-sub">الخطوة: <strong>${w.last_action}</strong> | التأخير: ${Number(w.delay).toFixed(2)}s</div>
+      <div class="worker-sub">التفصيل: ${w.reason}</div>
     `;
     workersList.appendChild(card);
 
-    if (w.role === "PRODUCER" && !updatedProducer && document.activeElement !== producerDelayInput) {
+    if (w.role === "PRODUCER" && !syncedProducer && document.activeElement !== producerDelayInput) {
       producerDelayInput.value = Number(w.delay).toFixed(2);
-      updatedProducer = true;
+      syncedProducer = true;
     }
-    if (w.role === "CONSUMER" && !updatedConsumer && document.activeElement !== consumerDelayInput) {
+    if (w.role === "CONSUMER" && !syncedConsumer && document.activeElement !== consumerDelayInput) {
       consumerDelayInput.value = Number(w.delay).toFixed(2);
-      updatedConsumer = true;
+      syncedConsumer = true;
     }
   });
 
-  eventLog.textContent = (state.logs || []).join("\n");
-  eventLog.scrollTop = eventLog.scrollHeight;
+  if (state.tick !== lastTickSeen) {
+    eventLog.textContent = (state.logs || []).join("\n");
+    eventLog.scrollTop = eventLog.scrollHeight;
+    lastTickSeen = state.tick;
+  }
 }
 
 async function sendControl(payload) {
@@ -81,8 +124,26 @@ async function sendControl(payload) {
     body: JSON.stringify(payload),
   });
   if (res.ok) {
+    renderState(await res.json());
+  }
+}
+
+async function submitChatText(message) {
+  const trimmed = message.trim();
+  if (!trimmed) return;
+  appendMessage("user", trimmed);
+
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: trimmed }),
+  });
+  if (res.ok) {
     const data = await res.json();
-    renderState(data);
+    appendMessage("bot", data.reply);
+    if (data.state) {
+      renderState(data.state);
+    }
   }
 }
 
@@ -90,11 +151,10 @@ async function pollState() {
   try {
     const res = await fetch("/api/state");
     if (res.ok) {
-      const data = await res.json();
-      renderState(data);
+      renderState(await res.json());
     }
   } catch (_) {
-    // Server may be starting or stopping
+    // Server starting or stopped
   }
 }
 
@@ -115,28 +175,20 @@ document.getElementById("btn-apply-speed").addEventListener("click", async () =>
   });
 });
 
-chatForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const message = chatInput.value.trim();
-  if (!message) return;
-  appendChat("user", message);
-  chatInput.value = "";
-
-  const res = await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
-  });
-  if (res.ok) {
-    const data = await res.json();
-    appendChat("bot", data.reply);
-    if (data.state) {
-      renderState(data.state);
-    }
-  }
+document.querySelectorAll(".chip[data-prompt]").forEach((chip) => {
+  chip.addEventListener("click", () => submitChatText(chip.dataset.prompt || ""));
 });
 
-appendChat("bot", "Ready. Ask about semaphores, critical sections, or command me to adjust speeds.");
+chatForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = chatInput.value;
+  chatInput.value = "";
+  await submitChatText(text);
+});
+
+appendMessage(
+  "bot",
+  "أهلاً بك! اسألني عن Semaphores و Critical Section و Race Condition أو اطلب مني التحكم بالسرعات والتشغيل."
+);
 pollState();
-setInterval(pollState, 400);
-EOF
+setInterval(pollState, 350);
